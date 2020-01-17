@@ -1,12 +1,12 @@
 # Dockerfile - alpine
-# https://github.com/openresty/docker-openresty
+# https://github.com/yiranzai/docker-openresty
 
 ARG RESTY_IMAGE_BASE="alpine"
 ARG RESTY_IMAGE_TAG="3.13"
 
 FROM ${RESTY_IMAGE_BASE}:${RESTY_IMAGE_TAG}
 
-LABEL maintainer="Evan Wies <evan@neomantra.net>"
+LABEL maintainer="yiranzai <wuqingdzx@gmail.com>"
 
 # Docker Build Arguments
 ARG RESTY_IMAGE_BASE="alpine"
@@ -16,6 +16,7 @@ ARG RESTY_OPENSSL_VERSION="1.1.1k"
 ARG RESTY_OPENSSL_PATCH_VERSION="1.1.1f"
 ARG RESTY_OPENSSL_URL_BASE="https://www.openssl.org/source"
 ARG RESTY_PCRE_VERSION="8.44"
+ARG RESTY_VTS_VERSION='0.1.18'
 ARG RESTY_J="1"
 ARG RESTY_CONFIG_OPTIONS="\
     --with-compat \
@@ -48,7 +49,7 @@ ARG RESTY_CONFIG_OPTIONS="\
     --with-stream_ssl_module \
     --with-threads \
     "
-ARG RESTY_CONFIG_OPTIONS_MORE=""
+ARG RESTY_CONFIG_OPTIONS_MORE="--add-module=/tmp/nginx-module-vts-${RESTY_VTS_VERSION}"
 ARG RESTY_LUAJIT_OPTIONS="--with-luajit-xcflags='-DLUAJIT_NUMMODE=2 -DLUAJIT_ENABLE_LUA52COMPAT'"
 
 ARG RESTY_ADD_PACKAGE_BUILDDEPS=""
@@ -79,25 +80,25 @@ LABEL resty_eval_post_make="${RESTY_EVAL_POST_MAKE}"
 
 
 RUN apk add --no-cache --virtual .build-deps \
-        build-base \
-        coreutils \
-        curl \
-        gd-dev \
-        geoip-dev \
-        libxslt-dev \
-        linux-headers \
-        make \
-        perl-dev \
-        readline-dev \
-        zlib-dev \
-        ${RESTY_ADD_PACKAGE_BUILDDEPS} \
+    build-base \
+    coreutils \
+    curl \
+    gd-dev \
+    geoip-dev \
+    libxslt-dev \
+    linux-headers \
+    make \
+    perl-dev \
+    readline-dev \
+    zlib-dev \
+    ${RESTY_ADD_PACKAGE_BUILDDEPS} \
     && apk add --no-cache \
-        gd \
-        geoip \
-        libgcc \
-        libxslt \
-        zlib \
-        ${RESTY_ADD_PACKAGE_RUNDEPS} \
+    gd \
+    geoip \
+    libgcc \
+    libxslt \
+    zlib \
+    ${RESTY_ADD_PACKAGE_RUNDEPS} \
     && cd /tmp \
     && if [ -n "${RESTY_EVAL_PRE_CONFIGURE}" ]; then eval $(echo ${RESTY_EVAL_PRE_CONFIGURE}); fi \
     && cd /tmp \
@@ -114,11 +115,11 @@ RUN apk add --no-cache --virtual .build-deps \
         && curl -s https://raw.githubusercontent.com/openresty/openresty/master/patches/openssl-${RESTY_OPENSSL_PATCH_VERSION}-sess_set_get_cb_yield.patch | patch -p1 ; \
     fi \
     && ./config \
-      no-threads shared zlib -g \
-      enable-ssl3 enable-ssl3-method \
-      --prefix=/usr/local/openresty/openssl \
-      --libdir=lib \
-      -Wl,-rpath,/usr/local/openresty/openssl/lib \
+    no-threads shared zlib -g \
+    enable-ssl3 enable-ssl3-method \
+    --prefix=/usr/local/openresty/openssl \
+    --libdir=lib \
+    -Wl,-rpath,/usr/local/openresty/openssl/lib \
     && make -j${RESTY_J} \
     && make -j${RESTY_J} install_sw \
     && cd /tmp \
@@ -126,13 +127,18 @@ RUN apk add --no-cache --virtual .build-deps \
     && tar xzf pcre-${RESTY_PCRE_VERSION}.tar.gz \
     && cd /tmp/pcre-${RESTY_PCRE_VERSION} \
     && ./configure \
-        --prefix=/usr/local/openresty/pcre \
-        --disable-cpp \
-        --enable-jit \
-        --enable-utf \
-        --enable-unicode-properties \
+    --prefix=/usr/local/openresty/pcre \
+    --disable-cpp \
+    --enable-jit \
+    --enable-utf \
+    --enable-unicode-properties \
     && make -j${RESTY_J} \
     && make -j${RESTY_J} install \
+    && cd /tmp \
+    && curl -fSL https://github.com/vozlt/nginx-module-vts/archive/v${RESTY_VTS_VERSION}.tar.gz -o nginx-module-vts-${RESTY_VTS_VERSION}.tar.gz \
+    && tar xzf nginx-module-vts-${RESTY_VTS_VERSION}.tar.gz \
+    && cd /tmp/nginx-module-vts-${RESTY_VTS_VERSION} \
+    && ls -al \
     && cd /tmp \
     && curl -fSL https://openresty.org/download/openresty-${RESTY_VERSION}.tar.gz -o openresty-${RESTY_VERSION}.tar.gz \
     && tar xzf openresty-${RESTY_VERSION}.tar.gz \
@@ -143,9 +149,16 @@ RUN apk add --no-cache --virtual .build-deps \
     && cd /tmp \
     && if [ -n "${RESTY_EVAL_POST_MAKE}" ]; then eval $(echo ${RESTY_EVAL_POST_MAKE}); fi \
     && rm -rf \
-        openssl-${RESTY_OPENSSL_VERSION}.tar.gz openssl-${RESTY_OPENSSL_VERSION} \
-        pcre-${RESTY_PCRE_VERSION}.tar.gz pcre-${RESTY_PCRE_VERSION} \
-        openresty-${RESTY_VERSION}.tar.gz openresty-${RESTY_VERSION} \
+    openssl-${RESTY_OPENSSL_VERSION}.tar.gz openssl-${RESTY_OPENSSL_VERSION} \
+    pcre-${RESTY_PCRE_VERSION}.tar.gz pcre-${RESTY_PCRE_VERSION} \
+    openresty-${RESTY_VERSION}.tar.gz openresty-${RESTY_VERSION} \
+    nginx-module-vts-${RESTY_VTS_VERSION}.tar.gz nginx-module-vts-${RESTY_VTS_VERSION} \
+    && mkdir -p /usr/local/openresty/nginx/conf \
+    && mkdir -p /etc/nginx/conf.d \
+    && mkdir -p /etc/nginx/module \
+    && curl -fsL https://raw.githubusercontent.com/yiranzai/docker-openresty/vts/nginx.conf > /usr/local/openresty/nginx/conf/nginx.conf \
+    && curl -fsL https://raw.githubusercontent.com/yiranzai/docker-openresty/vts/nginx.vh.default.conf > /etc/nginx/conf.d/default.conf \
+    && curl -fsL https://raw.githubusercontent.com/yiranzai/docker-openresty/vts/nginx.vh.vts.conf > /etc/nginx/module/vts.conf \
     && apk del .build-deps \
     && mkdir -p /var/run/openresty \
     && ln -sf /dev/stdout /usr/local/openresty/nginx/logs/access.log \
@@ -153,10 +166,6 @@ RUN apk add --no-cache --virtual .build-deps \
 
 # Add additional binaries into PATH for convenience
 ENV PATH=$PATH:/usr/local/openresty/luajit/bin:/usr/local/openresty/nginx/sbin:/usr/local/openresty/bin
-
-# Copy nginx configuration files
-COPY nginx.conf /usr/local/openresty/nginx/conf/nginx.conf
-COPY nginx.vh.default.conf /etc/nginx/conf.d/default.conf
 
 CMD ["/usr/local/openresty/bin/openresty", "-g", "daemon off;"]
 
